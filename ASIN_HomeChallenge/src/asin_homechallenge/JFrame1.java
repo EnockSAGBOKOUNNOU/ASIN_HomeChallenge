@@ -5,7 +5,15 @@
  */
 package asin_homechallenge;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.Arrays;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -112,11 +120,11 @@ public class JFrame1 extends javax.swing.JFrame {
         File selectedFile = fileChooser.getSelectedFile();
         chemBonCom = selectedFile.getAbsolutePath();
         fichierSelectionned = true;
-        jButton2.setText(selectedFile.getName()); // Met à jour le texte du bouton avec le nom du fichier
+        jButton1.setText(selectedFile.getName()); // Met à jour le texte du bouton avec le nom du fichier
     } else {
         fichierSelectionned = false; // Aucun fichier sélectionné
         chemBonCom = null;
-        jButton2.setText(""); // Efface le texte du bouton
+        jButton1.setText(""); // Efface le texte du bouton
     }
     }//GEN-LAST:event_jButton1ActionPerformed
 
@@ -126,6 +134,73 @@ public class JFrame1 extends javax.swing.JFrame {
         String filePath = file.getAbsolutePath().toLowerCase();
         return filePath.endsWith(".csv");
     }
+      // Méthode pour compter le nombre de lignes dans un fichier CSV
+    private int countRowsInCSV(File csvFile) {
+        int rowCount = 0;
+
+        try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                rowCount++;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return rowCount;
+    }
+    
+    private void insertCSVDataToDatabase(File csvFile) {
+    String url = "jdbc:mysql://localhost:3306/db_fact"; // Remplacez par votre URL
+    String user = "root"; // Remplacez par votre utilisateur MySQL
+    String password = ""; // Remplacez par votre mot de passe MySQL
+    
+
+    String query = "INSERT INTO asin_table (matricule, nom, prenom, datedenaissance, status) VALUES (?, ?, ?, ?, ?)";
+
+    try (Connection conn = DriverManager.getConnection(url, user, password);
+         PreparedStatement pstmt = conn.prepareStatement(query);
+         BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
+
+        conn.setAutoCommit(false); // Désactiver l'auto-commit
+        String line;
+        int count = 0;
+
+        while ((line = br.readLine()) != null) {
+            String[] values = line.split(";");
+            if (values.length == 5) {  // Vérification que la ligne contient bien 5 colonnes
+                pstmt.setString(1, values[0].trim());
+                pstmt.setString(2, values[1].trim());
+                pstmt.setString(3, values[2].trim());
+                pstmt.setString(4, values[3].trim());
+                pstmt.setString(5, values[4].trim());
+
+                pstmt.addBatch(); // Ajouter à un batch
+                count++;
+
+                if (count % 1000 == 0) { // Insérer en lots de 1000
+                    pstmt.executeBatch();
+                    conn.commit();  // Commit après chaque lot
+                    count = 0;
+                }
+            } else {
+                System.out.println("⚠ Ligne ignorée (format incorrect) : " + Arrays.toString(values));
+            }
+        }
+
+        // Exécuter les requêtes restantes
+        pstmt.executeBatch();
+        conn.commit(); 
+
+        JOptionPane.showMessageDialog(this, "Insertion terminée avec succès ! Nombre total de lignes insérées : " + count);
+
+    } catch (IOException | SQLException e) {
+        System.out.println("Erreur lors de l'insertion des données : " + e.getMessage());
+        e.printStackTrace();
+        JOptionPane.showMessageDialog(this, "Erreur lors de l'insertion des données dans la base.", "Erreur", JOptionPane.ERROR_MESSAGE);
+    }
+}
+
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
          // TODO add your handling code here:
           // Vérifier que le fichier est bien un fichier CSV
@@ -139,7 +214,14 @@ public class JFrame1 extends javax.swing.JFrame {
                     return;
                 }
 
+                // Appeler la méthode pour compter les lignes
+                int rowCount = countRowsInCSV(file);
+
+                // Afficher le nombre d'enregistrements dans une fenêtre de message
+                JOptionPane.showMessageDialog(this, "Nombre d'enregistrements dans le fichier : " + rowCount);
                 
+                // Insérer les données du CSV dans la base de données
+                insertCSVDataToDatabase(file);
             
             } else {
                 // Afficher un message d'erreur si aucun fichier n'a été sélectionné
