@@ -7,6 +7,7 @@ package asin_homechallenge;
 
 import java.io.File;
 import javax.swing.JFileChooser;
+import javax.swing.JOptionPane;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
@@ -119,8 +120,31 @@ public class JFrame1 extends javax.swing.JFrame {
     }
     }//GEN-LAST:event_jButton1ActionPerformed
 
+    
+  // Méthode pour valider que le fichier est un CSV
+    private boolean isValidCSVFile(File file) {
+        String filePath = file.getAbsolutePath().toLowerCase();
+        return filePath.endsWith(".csv");
+    }
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
          // TODO add your handling code here:
+          // Vérifier que le fichier est bien un fichier CSV
+        if (fichierSelectionned && chemBonCom != null) {
+                // Convertir le chemin (String) en objet File
+                File file = new File(chemBonCom);
+
+                // Vérifier que le fichier est bien un fichier CSV
+                if (!isValidCSVFile(file)) {
+                    JOptionPane.showMessageDialog(this, "Veuillez sélectionner un fichier CSV (.csv).", "Erreur", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                
+            
+            } else {
+                // Afficher un message d'erreur si aucun fichier n'a été sélectionné
+                JOptionPane.showMessageDialog(this, "Veuillez d'abord sélectionner un fichier CSV.", "Erreur", JOptionPane.WARNING_MESSAGE);
+            }
     }//GEN-LAST:event_jButton2ActionPerformed
 
     /**
