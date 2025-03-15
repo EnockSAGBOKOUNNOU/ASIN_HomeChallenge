@@ -29,7 +29,7 @@ public class JFrame1 extends javax.swing.JFrame {
      * Creates new form JFrame1
      */
     public JFrame1() {
-        this.setUndecorated(true);
+       // this.setUndecorated(true);
         initComponents();
     }
 
