@@ -16,6 +16,7 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
+import javax.swing.SwingWorker;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
@@ -28,6 +29,7 @@ public class JFrame1 extends javax.swing.JFrame {
      * Creates new form JFrame1
      */
     public JFrame1() {
+        this.setUndecorated(true);
         initComponents();
     }
 
@@ -43,6 +45,7 @@ public class JFrame1 extends javax.swing.JFrame {
         jPanel1 = new javax.swing.JPanel();
         jButton1 = new javax.swing.JButton();
         jButton2 = new javax.swing.JButton();
+        jLabel1 = new javax.swing.JLabel();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
@@ -69,8 +72,13 @@ public class JFrame1 extends javax.swing.JFrame {
                 .addComponent(jButton2, javax.swing.GroupLayout.PREFERRED_SIZE, 245, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(298, 298, 298))
             .addGroup(jPanel1Layout.createSequentialGroup()
-                .addGap(169, 169, 169)
-                .addComponent(jButton1, javax.swing.GroupLayout.PREFERRED_SIZE, 521, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(jPanel1Layout.createSequentialGroup()
+                        .addGap(169, 169, 169)
+                        .addComponent(jButton1, javax.swing.GroupLayout.PREFERRED_SIZE, 521, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addGroup(jPanel1Layout.createSequentialGroup()
+                        .addGap(382, 382, 382)
+                        .addComponent(jLabel1)))
                 .addContainerGap(179, Short.MAX_VALUE))
         );
         jPanel1Layout.setVerticalGroup(
@@ -78,7 +86,9 @@ public class JFrame1 extends javax.swing.JFrame {
             .addGroup(jPanel1Layout.createSequentialGroup()
                 .addGap(51, 51, 51)
                 .addComponent(jButton1, javax.swing.GroupLayout.PREFERRED_SIZE, 42, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 183, Short.MAX_VALUE)
+                .addGap(61, 61, 61)
+                .addComponent(jLabel1)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 122, Short.MAX_VALUE)
                 .addComponent(jButton2, javax.swing.GroupLayout.PREFERRED_SIZE, 32, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(66, 66, 66))
         );
@@ -150,57 +160,85 @@ public class JFrame1 extends javax.swing.JFrame {
         return rowCount;
     }
     
-    private void insertCSVDataToDatabase(File csvFile) {
-    String url = "jdbc:mysql://localhost:3306/db_fact"; // Remplacez par votre URL
-    String user = "root"; // Remplacez par votre utilisateur MySQL
-    String password = ""; // Remplacez par votre mot de passe MySQL
-    
+       // Méthode pour insérer les données du CSV dans la base de données avec affichage du pourcentage dans jLabel1
+private void insertCSVDataToDatabase(final File csvFile) {
+    new SwingWorker<Void, Integer>() {
+        @Override
+        protected Void doInBackground() throws Exception {
+            String url = "jdbc:mysql://localhost:3306/db_fact"; // Remplacez par votre URL
+            String user = "root"; // Remplacez par votre utilisateur MySQL
+            String password = ""; // Remplacez par votre mot de passe MySQL
 
-    String query = "INSERT INTO asin_table (matricule, nom, prenom, datedenaissance, status) VALUES (?, ?, ?, ?, ?)";
+            String query = "INSERT INTO asin_table (matricule, nom, prenom, datedenaissance, status) VALUES (?, ?, ?, ?, ?)";
+            
+            try (Connection conn = DriverManager.getConnection(url, user, password);
+                 PreparedStatement pstmt = conn.prepareStatement(query);
+                 BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
 
-    try (Connection conn = DriverManager.getConnection(url, user, password);
-         PreparedStatement pstmt = conn.prepareStatement(query);
-         BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
+                conn.setAutoCommit(false); // Désactiver l'auto-commit
+                
+                // Calculer le nombre total de lignes du fichier
+                int totalRows = countRowsInCSV(csvFile);
+                int processedRows = 0;
+                int count = 0;
+                String line;
+                
+                while ((line = br.readLine()) != null) {
+                    String[] values = line.split(";");
+                    if (values.length == 5) {  // Vérification que la ligne contient bien 5 colonnes
+                        pstmt.setString(1, values[0].trim());
+                        pstmt.setString(2, values[1].trim());
+                        pstmt.setString(3, values[2].trim());
+                        pstmt.setString(4, values[3].trim());
+                        pstmt.setString(5, values[4].trim());
 
-        conn.setAutoCommit(false); // Désactiver l'auto-commit
-        String line;
-        int count = 0;
+                        pstmt.addBatch(); // Ajouter à un batch
+                        count++;
+                        processedRows++;
 
-        while ((line = br.readLine()) != null) {
-            String[] values = line.split(";");
-            if (values.length == 5) {  // Vérification que la ligne contient bien 5 colonnes
-                pstmt.setString(1, values[0].trim());
-                pstmt.setString(2, values[1].trim());
-                pstmt.setString(3, values[2].trim());
-                pstmt.setString(4, values[3].trim());
-                pstmt.setString(5, values[4].trim());
-
-                pstmt.addBatch(); // Ajouter à un batch
-                count++;
-
-                if (count % 1000 == 0) { // Insérer en lots de 1000
-                    pstmt.executeBatch();
-                    conn.commit();  // Commit après chaque lot
-                    count = 0;
+                        if (count % 1000 == 0) { // Insérer en lots de 1000
+                            pstmt.executeBatch();
+                            conn.commit();  // Commit après chaque lot
+                            count = 0;
+                        }
+                    } else {
+                        System.out.println("⚠ Ligne ignorée (format incorrect) : " + Arrays.toString(values));
+                        processedRows++; // On incrémente même en cas de ligne incorrecte pour la progression
+                    }
+                    
+                    // Calculer le pourcentage de progression et publier la valeur
+                    int progress = (int)(((double) processedRows / totalRows) * 100);
+                    publish(progress);
                 }
-            } else {
-                System.out.println("⚠ Ligne ignorée (format incorrect) : " + Arrays.toString(values));
+
+                // Exécuter les requêtes restantes et commit final
+                pstmt.executeBatch();
+                conn.commit();
+                
+            } catch (IOException | SQLException e) {
+                System.out.println("Erreur lors de l'insertion des données : " + e.getMessage());
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(null, "Erreur lors de l'insertion des données dans la base.", "Erreur", JOptionPane.ERROR_MESSAGE);
             }
+            return null;
         }
 
-        // Exécuter les requêtes restantes
-        pstmt.executeBatch();
-        conn.commit(); 
+        @Override
+        protected void process(java.util.List<Integer> chunks) {
+            // Met à jour jLabel1 avec le dernier pourcentage reçu
+            int lastProgress = chunks.get(chunks.size() - 1);
+            jLabel1.setText("Progression : " + lastProgress + "%");
+        }
 
-        JOptionPane.showMessageDialog(this, "Insertion terminée avec succès ! Nombre total de lignes insérées : " + count);
-
-    } catch (IOException | SQLException e) {
-        System.out.println("Erreur lors de l'insertion des données : " + e.getMessage());
-        e.printStackTrace();
-        JOptionPane.showMessageDialog(this, "Erreur lors de l'insertion des données dans la base.", "Erreur", JOptionPane.ERROR_MESSAGE);
-    }
+        @Override
+        protected void done() {
+            JOptionPane.showMessageDialog(null, "Insertion terminée avec succès !");
+            jLabel1.setText("Insertion terminée !");
+        }
+    }.execute(); // Lancer le SwingWorker
 }
 
+    
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
          // TODO add your handling code here:
           // Vérifier que le fichier est bien un fichier CSV
@@ -268,6 +306,7 @@ public class JFrame1 extends javax.swing.JFrame {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;
+    private javax.swing.JLabel jLabel1;
     private javax.swing.JPanel jPanel1;
     // End of variables declaration//GEN-END:variables
 }
